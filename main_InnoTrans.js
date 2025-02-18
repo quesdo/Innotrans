@@ -1,3 +1,9 @@
+// Initialisation de Supabase
+const supabaseUrl = 'https://kikivfglslrobwttvlvn.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtpa2l2Zmdsc2xyb2J3dHR2bHZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ1MTIwNDQsImV4cCI6MjA1MDA4ODA0NH0.Njo06GXSyZHjpjRwPJ2zpElJ88VYgqN2YYDfTJnBQ6k';
+const { createClient } = supabase;
+const supabaseClient = createClient(supabaseUrl, supabaseKey);
+
 function openMain() {
     console.log("Compass clicked!");
 }
@@ -21,6 +27,76 @@ function sendPlayOp(operationName) {
 function sendRemoveOp(operationName) {
     console.log("Removing operation: " + operationName);
     window.parent.postMessage(JSON.stringify({ action: "removeOperation", actor: operationName }), "*");
+}
+
+// Fonction pour afficher le graphique
+function updateChart(data) {
+    const lastFiveSessions = data.slice(-5).reverse();
+    const canvas = document.getElementById('statsChart');
+    
+    if (window.currentChart) {
+        window.currentChart.destroy();
+    }
+
+    if (lastFiveSessions.length === 0) {
+        return;
+    }
+
+    const labels = lastFiveSessions[0].steps.map(step => step.title);
+    const datasets = lastFiveSessions.map((session, index) => ({
+        label: `Session ${lastFiveSessions.length - index} (${new Date(session.timestamp).toLocaleDateString()})`,
+        data: session.steps.map(step => step.time / 1000),
+        backgroundColor: [
+            'rgba(0, 83, 134, 0.7)',
+            'rgba(29, 169, 255, 0.7)',
+            'rgba(200, 211, 0, 0.7)',
+            'rgba(232, 119, 34, 0.7)',
+            'rgba(218, 41, 28, 0.7)'
+        ][index],
+        borderColor: [
+            'rgb(0, 83, 134)',
+            'rgb(29, 169, 255)',
+            'rgb(200, 211, 0)',
+            'rgb(232, 119, 34)',
+            'rgb(218, 41, 28)'
+        ][index],
+        borderWidth: 1
+    }));
+
+    window.currentChart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                title: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Temps (secondes)'
+                    }
+                },
+                x: {
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            }
+        }
+    });
 }
 
 document.addEventListener('DOMContentLoaded', (event) => {
@@ -92,7 +168,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         
         if (historyPanel.classList.contains('visible')) {
             processStepsContainer.style.display = 'none';
-            window.updateChart(statsHistory);
+            updateChart(statsHistory);
         } else {
             processStepsContainer.style.display = 'block';
         }
@@ -285,31 +361,35 @@ document.addEventListener('DOMContentLoaded', (event) => {
     // Window message event listener
     window.addEventListener('message', function(event) {
         try {
-            const msg = JSON.parse(event.data);
-            if (msg.action === "operationChange") {
-                const nextOpParts = msg.nextOp.split(" - ");
-                const stepNumber = nextOpParts[0];
-                const stepTitle = nextOpParts[1];
-                
-                const indicator = document.querySelector('.current-step-indicator');
-                if (indicator) {
-                    indicator.querySelector('.step-number').textContent = `Step ${stepNumber}`;
-                    indicator.querySelector('.step-title').textContent = stepTitle;
-                }
-
-                // Update highlighted steps
-                const steps = document.querySelectorAll('.process-step');
-                steps.forEach((step) => {
-                    const currentStepNumber = step.querySelector('.process-number').textContent.trim();
-                    if (parseInt(currentStepNumber) < parseInt(stepNumber)) {
-                        step.classList.add('highlighted');
-                    } else if (parseInt(currentStepNumber) === parseInt(stepNumber)) {
-                        step.classList.remove('highlighted');
+            if (typeof event.data === 'string') {
+                const msg = JSON.parse(event.data);
+                if (msg.action === "operationChange") {
+                    const nextOpParts = msg.nextOp.split(" - ");
+                    const stepNumber = nextOpParts[0];
+                    const stepTitle = nextOpParts[1];
+                    
+                    const indicator = document.querySelector('.current-step-indicator');
+                    if (indicator) {
+                        indicator.querySelector('.step-number').textContent = `Step ${stepNumber}`;
+                        indicator.querySelector('.step-title').textContent = stepTitle;
                     }
-                });
+
+                    // Update highlighted steps
+                    const steps = document.querySelectorAll('.process-step');
+                    steps.forEach((step) => {
+                        const currentStepNumber = step.querySelector('.process-number').textContent.trim();
+                        if (parseInt(currentStepNumber) < parseInt(stepNumber)) {
+                            step.classList.add('highlighted');
+                        } else if (parseInt(currentStepNumber) === parseInt(stepNumber)) {
+                            step.classList.remove('highlighted');
+                        }
+                    });
+                }
             }
         } catch (e) {
-            console.error("Error processing message:", e);
+            if (!(e instanceof SyntaxError)) {
+                console.error("Error processing message:", e);
+            }
         }
     });
 
