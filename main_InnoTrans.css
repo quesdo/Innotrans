@@ -97,13 +97,20 @@ div.header > span {
 /* Stats Panel */
 .stats-panel {
     display: none;
-    margin: 20px auto;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    height: 90%;
+    margin: 0;
     padding: 20px;
     background-color: #f9f9f9;
     border-radius: 8px;
-    max-width: 800px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     border: 1px solid var(--Major-Color-Grey);
+    z-index: 1000;
+    overflow: auto;
 }
 
 .stats-panel.visible {
@@ -116,6 +123,16 @@ div.header > span {
     border-bottom: 2px solid var(--Major-Color-LightBlue);
     padding-bottom: 10px;
     font-size: 24px;
+}
+
+.chart-container {
+    width: 100%;
+    height: 70%;
+    margin: 20px 0;
+    padding: 20px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 #stepStats div {
@@ -141,6 +158,33 @@ div.header > span {
     color: var(--Major-Color-DarkBlue);
 }
 
+.total-time-list {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.total-time-list h4 {
+    margin-top: 0;
+    color: var(--Major-Color-DarkBlue);
+    border-bottom: 1px solid var(--Major-Color-LightBlue);
+    padding-bottom: 8px;
+}
+
+.total-time-list div {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.total-time-list div:last-child {
+    border-bottom: none;
+}
+
 /* Process Steps */
 .process-steps {
     padding: 20px;
@@ -154,11 +198,13 @@ div.header > span {
     border: 1px solid var(--Major-Color-Grey);
     border-radius: 5px;
     background-color: #f9f9f9;
+    transition: all 0.3s ease;
 }
 
 .process-step:hover {
     border: 2px solid var(--Major-Color-DarkBlue);
     background-color: #f1f1f1;
+    transform: translateX(5px);
 }
 
 /* Highlighted process step */
@@ -185,11 +231,6 @@ div.header > span {
     background: linear-gradient(145deg, var(--Major-Color-LightBlue), var(--Major-Color-DarkBlue));
     color: white;
     box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.3), -3px -3px 8px rgba(255, 255, 255, 0.3);
-}
-
-.process-step .validate-button:disabled, .process-step .reset-button:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
 }
 
 .process-info {
@@ -221,4 +262,69 @@ div.header > span {
 
 .process-image:hover {
     transform: scale(1.6);
+}
+
+/* Current Step Indicator */
+.current-step-indicator {
+    position: fixed;
+    top: 90px;
+    left: 20px;
+    background-color: var(--Major-Color-DarkBlue);
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
+    font-size: 18px;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: transform 0.3s ease;
+}
+
+.current-step-indicator:hover {
+    transform: scale(1.05);
+}
+
+.current-step-indicator .step-number {
+    font-weight: bold;
+    color: var(--Delmia-Yellow);
+    margin-right: 10px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .process-title {
+        font-size: 20px;
+    }
+
+    .process-image {
+        height: 50px;
+        width: 50px;
+    }
+
+    .process-number {
+        font-size: 20px;
+        width: 40px;
+        height: 40px;
+        line-height: 40px;
+    }
+
+    .stats-panel {
+        width: 95%;
+        height: 95%;
+    }
+}
+
+/* Animation pour l'apparition du panneau des stats */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -60%);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%);
+    }
+}
+
+.stats-panel.visible {
+    animation: fadeIn 0.3s ease-out forwards;
 }
