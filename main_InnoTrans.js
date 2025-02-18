@@ -244,121 +244,124 @@ document.addEventListener('DOMContentLoaded', (event) => {
     }
 
     async function updateChart() {
-        try {
-            const { data, error } = await supabaseClient
-                .from('operation_times')
-                .select('*')
-                .order('timestamp', { ascending: false });
+    try {
+        // Récupérer les données de Supabase
+        const { data, error } = await supabaseClient
+            .from('operation_times')
+            .select('*')
+            .order('timestamp', { ascending: false });
 
-            if (error) throw error;
+        if (error) throw error;
 
-            // Grouper les données par session (timestamp)
-            const sessionData = {};
-            data.forEach(record => {
-                const timestamp = record.timestamp.split('T')[0]; // Grouper par jour
-                if (!sessionData[timestamp]) {
-                    sessionData[timestamp] = {
-                        operations: {},
-                        totalTime: 0
-                    };
-                }
-                sessionData[timestamp].operations[record.operation_number] = record;
-                sessionData[timestamp].totalTime = Math.max(sessionData[timestamp].totalTime || 0, record.total_time || 0);
-            });
-
-            // Prendre les 5 dernières sessions
-            const lastFiveSessions = Object.entries(sessionData)
-                .sort((a, b) => new Date(b[0]) - new Date(a[0]))
-                .slice(0, 5);
-
-            // Mettre à jour la liste des temps totaux
-            const totalTimeList = document.createElement('div');
-            totalTimeList.className = 'total-time-list';
-            totalTimeList.innerHTML = '<h4>Temps totaux par session:</h4>';
-            lastFiveSessions.forEach(([date, session]) => {
-                const totalTimeMinutes = (session.totalTime / 1000 / 60).toFixed(2);
-                totalTimeList.innerHTML += `
-                    <div style="margin: 10px 0; padding: 5px; border-bottom: 1px solid #eee;">
-                        <strong>${new Date(date).toLocaleDateString()}</strong>: 
-                        ${totalTimeMinutes} minutes
-                    </div>
-                `;
-            });
-
-            let existingTotalTimeList = document.querySelector('.total-time-list');
-            if (existingTotalTimeList) {
-                existingTotalTimeList.replaceWith(totalTimeList);
-            } else {
-                document.getElementById('historyPanel').appendChild(totalTimeList);
-            }
-
-            const canvas = document.getElementById('statsChart');
-            
-            if (currentChart) {
-                currentChart.destroy();
-            }
-
-            const datasets = Array.from({ length: 8 }, (_, i) => {
-                const operationNumber = i + 1;
-                return {
-                    label: data.find(d => d.operation_number === operationNumber)?.operation_name || `Opération ${operationNumber}`,
-                    data: lastFiveSessions.map(([_, session]) => 
-                        (session.operations[operationNumber]?.time_taken || 0) / 1000
-                    ).reverse(),
-                    backgroundColor: [
-                        'rgba(0, 83, 134, 0.7)',   // Major-Color-DarkBlue
-                        'rgba(29, 169, 255, 0.7)',  // Major-Color-LightBlue
-                        'rgba(200, 211, 0, 0.7)',   // Biovia-Medidata-green
-                        'rgba(232, 119, 34, 0.7)',  // Enovia-Netvibes-Orange
-                        'rgba(218, 41, 28, 0.7)',   // SolidWorks-Red
-                        'rgba(0, 150, 136, 0.7)',
-                        'rgba(156, 39, 176, 0.7)',
-                        'rgba(33, 150, 243, 0.7)'
-                    ][i]
+        // Grouper les données par session (timestamp exact)
+        const sessionData = {};
+        data.forEach(record => {
+            const timestamp = record.timestamp; // Utiliser le timestamp complet
+            if (!sessionData[timestamp]) {
+                sessionData[timestamp] = {
+                    operations: {},
+                    totalTime: 0,
+                    date: new Date(timestamp)
                 };
-            });
+            }
+            sessionData[timestamp].operations[record.operation_number] = record;
+            sessionData[timestamp].totalTime = Math.max(sessionData[timestamp].totalTime || 0, record.total_time || 0);
+        });
 
-            currentChart = new Chart(canvas, {
-                type: 'bar',
-                data: {
-                    labels: lastFiveSessions.map(([date]) => 
-                        new Date(date).toLocaleDateString()
-                    ).reverse(),
-                    datasets: datasets
+        // Prendre les 5 dernières sessions uniques
+        const lastFiveSessions = Object.entries(sessionData)
+            .sort((a, b) => b[1].date - a[1].date)
+            .slice(0, 5);
+
+        const canvas = document.getElementById('statsChart');
+        
+        if (currentChart) {
+            currentChart.destroy();
+        }
+
+        // Préparer les données pour le graphique
+        const datasets = Array.from({ length: 8 }, (_, i) => {
+            const operationNumber = i + 1;
+            return {
+                label: `${operationNumber} - ${data.find(d => d.operation_number === operationNumber)?.operation_name}`,
+                data: lastFiveSessions.map(([_, session]) => 
+                    (session.operations[operationNumber]?.time_taken || 0) / 1000
+                ).reverse(),
+                backgroundColor: [
+                    'rgba(0, 83, 134, 0.7)',    // Major-Color-DarkBlue
+                    'rgba(29, 169, 255, 0.7)',   // Major-Color-LightBlue
+                    'rgba(200, 211, 0, 0.7)',    // Biovia-Medidata-green
+                    'rgba(232, 119, 34, 0.7)',   // Enovia-Netvibes-Orange
+                    'rgba(218, 41, 28, 0.7)',    // SolidWorks-Red
+                    'rgba(0, 150, 136, 0.7)',
+                    'rgba(156, 39, 176, 0.7)',
+                    'rgba(33, 150, 243, 0.7)'
+                ][i]
+            };
+        });
+
+        // Mettre à jour la liste des temps totaux
+        const totalTimeList = document.createElement('div');
+        totalTimeList.className = 'total-time-list';
+        totalTimeList.innerHTML = '<h4>Temps totaux par session:</h4>';
+        lastFiveSessions.reverse().forEach(([timestamp, session]) => {
+            const totalTimeMinutes = (session.totalTime / 1000 / 60).toFixed(2);
+            totalTimeList.innerHTML += `
+                <div>
+                    <strong>${session.date.toLocaleString()}</strong>: 
+                    ${totalTimeMinutes} minutes
+                </div>
+            `;
+        });
+
+        let existingTotalTimeList = document.querySelector('.total-time-list');
+        if (existingTotalTimeList) {
+            existingTotalTimeList.replaceWith(totalTimeList);
+        } else {
+            document.getElementById('historyPanel').appendChild(totalTimeList);
+        }
+
+        currentChart = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: lastFiveSessions.map(([_, session]) => 
+                    session.date.toLocaleString()
+                ).reverse(),
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        align: 'start',
+                        labels: {
+                            padding: 20
+                        }
+                    }
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            align: 'start',
-                            labels: {
-                                padding: 20
-                            }
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Temps (secondes)'
                         }
                     },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Temps (secondes)'
-                            }
-                        },
-                        x: {
-                            ticks: {
-                                maxRotation: 45,
-                                minRotation: 45
-                            }
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
                         }
                     }
                 }
-            });
-        } catch (error) {
-            console.error('Error updating chart:', error);
-        }
+            }
+        });
+    } catch (error) {
+        console.error('Error updating chart:', error);
     }
+}
 
     // Initialize step highlighting
     highlightSteps();
