@@ -1,3 +1,8 @@
+// Configuration Supabase
+const SUPABASE_URL = 'https://kikivfglslrobwttvlvn.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtpa2l2Zmdsc2xyb2J3dHR2bHZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ1MTIwNDQsImV4cCI6MjA1MDA4ODA0NH0.Njo06GXSyZHjpjRwPJ2zpElJ88VYgqN2YYDfTJnBQ6k';
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 function openMain() {
     console.log("Compass clicked!");
 }
@@ -21,6 +26,16 @@ function sendPlayOp(operationName) {
 function sendRemoveOp(operationName) {
     console.log("Removing operation: " + operationName);
     window.parent.postMessage(JSON.stringify({ action: "removeOperation", actor: operationName }), "*");
+}
+
+// Fonction pour obtenir ou générer un ID utilisateur
+function getUserId() {
+    let userId = localStorage.getItem('userId');
+    if (!userId) {
+        userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('userId', userId);
+    }
+    return userId;
 }
 
 document.addEventListener('DOMContentLoaded', (event) => {
@@ -78,6 +93,53 @@ document.addEventListener('DOMContentLoaded', (event) => {
         const minutes = Math.floor((ms / (1000 * 60)) % 60);
         const hours = Math.floor(ms / (1000 * 60 * 60));
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    // Fonctions Supabase pour la gestion des statistiques
+    async function saveStatsHistory(stats) {
+        try {
+            const { data, error } = await supabase
+                .from('process_stats')
+                .insert([{
+                    timestamp: new Date().toISOString(),
+                    steps: stats.steps,
+                    total_time: stats.totalTime,
+                    user_id: getUserId()
+                }]);
+
+            if (error) throw error;
+            
+            // Recharger les statistiques après la sauvegarde
+            await loadStatsHistory();
+        } catch (error) {
+            console.error('Error saving statistics:', error.message);
+        }
+    }
+
+    async function loadStatsHistory() {
+        try {
+            const { data, error } = await supabase
+                .from('process_stats')
+                .select('*')
+                .order('timestamp', { ascending: false })
+                .limit(50);
+
+            if (error) throw error;
+
+            statsHistory = data.map(record => ({
+                timestamp: record.timestamp,
+                steps: record.steps,
+                totalTime: record.total_time,
+                userId: record.user_id
+            }));
+
+            if (historyPanel.classList.contains('visible')) {
+                window.updateChart(statsHistory);
+            }
+        } catch (error) {
+            console.error('Error loading statistics:', error.message);
+            statsHistory = [];
+        }
     }
 
     // Show history button click handler
@@ -170,7 +232,6 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
         let totalMs = 0;
         const currentStats = {
-            timestamp: new Date().toLocaleString(),
             steps: [],
             totalTime: 0
         };
@@ -191,24 +252,10 @@ document.addEventListener('DOMContentLoaded', (event) => {
         });
 
         currentStats.totalTime = totalMs;
-        statsHistory.push(currentStats);
+        saveStatsHistory(currentStats);
         
         totalTime.textContent = `Total Time: ${formatTime(totalMs)}`;
         statsPanel.classList.add('visible');
-        saveStatsHistory();
-    }
-
-    // Function to save stats history to localStorage
-    function saveStatsHistory() {
-        localStorage.setItem('statsHistory', JSON.stringify(statsHistory));
-    }
-
-    // Function to load stats history from localStorage
-    function loadStatsHistory() {
-        const saved = localStorage.getItem('statsHistory');
-        if (saved) {
-            statsHistory = JSON.parse(saved);
-        }
     }
 
     // Next operation handler
@@ -293,4 +340,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
     // Initialize step highlighting and load history
     highlightSteps();
     loadStatsHistory();
+    
+    // Rafraîchir les statistiques toutes les 30 secondes
+    setInterval(loadStatsHistory, 30000);
 });
