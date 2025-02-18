@@ -1,8 +1,8 @@
 // Initialisation de Supabase
-const supabaseUrl = 'https://kikivfglslrobwttvlvn.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtpa2l2Zmdsc2xyb2J3dHR2bHZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ1MTIwNDQsImV4cCI6MjA1MDA4ODA0NH0.Njo06GXSyZHjpjRwPJ2zpElJ88VYgqN2YYDfTJnBQ6k';
-const { createClient } = supabase;
-const supabaseClient = createClient(supabaseUrl, supabaseKey);
+// Initialisation de Supabase
+const supabaseClient = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_KEY);
+
+
 
 function openMain() {
     console.log("Compass clicked!");
