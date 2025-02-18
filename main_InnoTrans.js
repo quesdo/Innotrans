@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
     let globalStartTime = null;
     let timerInterval = null;
     let isTimerRunning = false;
+    let statsHistory = [];
 
     const timerButton = document.getElementById('timerButton');
     const globalTimerDisplay = document.getElementById('globalTimer');
@@ -47,33 +48,42 @@ document.addEventListener('DOMContentLoaded', (event) => {
     const historyPanel = document.getElementById('historyPanel');
     const processStepsContainer = document.querySelector('.process-steps');
 
+    // Écoute des messages de changement d'opération
+    window.addEventListener('message', function(event) {
+        try {
+            const msg = JSON.parse(event.data);
+            if (msg.action === "operationChange") {
+                const nextOpParts = msg.nextOp.split(" - ");
+                const stepNumber = nextOpParts[0];
+                const stepTitle = nextOpParts[1];
+                
+                const indicator = document.querySelector('.current-step-indicator');
+                if (indicator) {
+                    indicator.querySelector('.step-number').textContent = `Step ${stepNumber}`;
+                    indicator.querySelector('.step-title').textContent = stepTitle;
+                }
+
+                const steps = document.querySelectorAll('.process-step');
+                steps.forEach((step) => {
+                    const currentStepNumber = step.querySelector('.process-number').textContent.trim();
+                    if (parseInt(currentStepNumber) < parseInt(stepNumber)) {
+                        step.classList.add('highlighted');
+                    } else if (parseInt(currentStepNumber) === parseInt(stepNumber)) {
+                        step.classList.remove('highlighted');
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("Error processing message:", e);
+        }
+    });
+
     // Timer formatting function
     function formatTime(ms) {
         const seconds = Math.floor((ms / 1000) % 60);
         const minutes = Math.floor((ms / (1000 * 60)) % 60);
         const hours = Math.floor(ms / (1000 * 60 * 60));
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-    }
-
-    // Update all timers
-    function updateTimers() {
-        if (!isTimerRunning) return;
-
-        const now = Date.now();
-        
-        if (globalStartTime) {
-            globalTimerDisplay.textContent = formatTime(now - globalStartTime);
-        }
-
-        const currentStep = Array.from(steps).find((step, index) => !stepStatuses[index]);
-        if (currentStep) {
-            const currentIndex = Array.from(steps).indexOf(currentStep);
-            const timerDisplay = currentStep.querySelector('.timer-display');
-            if (timerDisplay && startTimes[currentIndex]) {
-                const elapsedTime = stepTimes[currentIndex] + (now - startTimes[currentIndex]);
-                timerDisplay.textContent = formatTime(elapsedTime);
-            }
-        }
     }
 
     // Show history button click handler
@@ -89,9 +99,33 @@ document.addEventListener('DOMContentLoaded', (event) => {
         }
     });
 
+    // Update all timers
+    function updateTimers() {
+        if (!isTimerRunning) return;
+
+        const now = Date.now();
+        
+        // Update global timer
+        if (globalStartTime) {
+            globalTimerDisplay.textContent = formatTime(now - globalStartTime);
+        }
+
+        // Update current step timer
+        const currentStep = Array.from(steps).find((step, index) => !stepStatuses[index]);
+        if (currentStep) {
+            const currentIndex = Array.from(steps).indexOf(currentStep);
+            const timerDisplay = currentStep.querySelector('.timer-display');
+            if (timerDisplay && startTimes[currentIndex]) {
+                const elapsedTime = stepTimes[currentIndex] + (now - startTimes[currentIndex]);
+                timerDisplay.textContent = formatTime(elapsedTime);
+            }
+        }
+    }
+
     // Timer button click handler
     timerButton.addEventListener('click', () => {
         if (!isTimerRunning) {
+            // Start timer
             isTimerRunning = true;
             globalStartTime = Date.now();
             timerButton.textContent = 'Stop Timer';
@@ -101,6 +135,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
             historyPanel.classList.remove('visible');
             processStepsContainer.style.display = 'block';
 
+            // Reset step times and statuses for new session
             stepTimes.fill(0);
             stepStatuses.fill(false);
             startTimes.fill(null);
@@ -109,14 +144,17 @@ document.addEventListener('DOMContentLoaded', (event) => {
                 step.classList.remove('highlighted');
             });
 
+            // Start timing the first step
             startTimes[0] = Date.now();
             
         } else {
+            // Stop timer and show statistics
             isTimerRunning = false;
             clearInterval(timerInterval);
             timerButton.textContent = 'Start Timer';
             timerButton.classList.remove('running');
             
+            // Save time for current step if any
             const currentStep = Array.from(steps).find((step, index) => !stepStatuses[index]);
             if (currentStep) {
                 const currentIndex = Array.from(steps).indexOf(currentStep);
@@ -130,14 +168,13 @@ document.addEventListener('DOMContentLoaded', (event) => {
         }
     });
 
-    // Show statistics panel and save to Supabase
+    // Show statistics panel
     async function showStatistics() {
         const stepStats = document.getElementById('stepStats');
         const totalTime = document.getElementById('totalTime');
         stepStats.innerHTML = '';
 
         let totalMs = 0;
-        const sessionTimestamp = new Date().toISOString();
 
         // Pour chaque étape, sauvegarder dans Supabase
         for (let index = 0; index < steps.length; index++) {
@@ -157,9 +194,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
                     .insert([{
                         operation_number: index + 1,
                         operation_name: title,
-                        time_taken: time,
-                        total_time: totalMs,
-                        session_id: sessionTimestamp // Ajout d'un identifiant de session
+                        time_taken: time
                     }]);
 
                 if (error) throw error;
@@ -179,9 +214,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
         if (stepStatuses.slice(0, stepIndex).every(status => status)) {
             if (isTimerRunning && startTimes[stepIndex]) {
+                // Save completion time for current step
                 stepTimes[stepIndex] += Date.now() - startTimes[stepIndex];
                 startTimes[stepIndex] = null;
 
+                // Start timing next step
                 if (stepIndex + 1 < steps.length) {
                     startTimes[stepIndex + 1] = Date.now();
                 }
@@ -203,6 +240,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
             startTimes[stepIndex] = null;
             stepTimes[stepIndex] = 0;
             
+            // Reset all subsequent steps
             for (let i = stepIndex + 1; i < steps.length; i++) {
                 startTimes[i] = null;
                 stepTimes[i] = 0;
@@ -212,6 +250,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
                 }
             }
 
+            // Start timing the reset step
             startTimes[stepIndex] = Date.now();
         }
 
@@ -220,6 +259,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         sendResetOp(operationName);
         highlightSteps();
 
+        // Reset subsequent steps
         for (let i = stepIndex + 1; i < steps.length; i++) {
             stepStatuses[i] = false;
             const nextStepOperation = getOperationName(steps[i]);
@@ -245,89 +285,53 @@ document.addEventListener('DOMContentLoaded', (event) => {
         });
     }
 
+    // Fonction pour mettre à jour le graphique
     async function updateChart() {
         try {
-            // Récupérer les données groupées par session
+            // Récupérer les données de Supabase
             const { data, error } = await supabaseClient
                 .from('operation_times')
                 .select('*')
-                .order('session_id', { ascending: false });
+                .order('timestamp', { ascending: false });
 
             if (error) throw error;
 
-            // Grouper les données par session
-            const sessions = new Map();
+            // Grouper les données par opération
+            const groupedData = {};
             data.forEach(record => {
-                if (!sessions.has(record.session_id)) {
-                    sessions.set(record.session_id, {
-                        timestamp: new Date(record.timestamp),
-                        operations: new Map(),
-                        totalTime: record.total_time
-                    });
+                if (!groupedData[record.operation_number]) {
+                    groupedData[record.operation_number] = [];
                 }
-                sessions.get(record.session_id).operations.set(record.operation_number, record);
+                if (groupedData[record.operation_number].length < 5) {
+                    groupedData[record.operation_number].push(record);
+                }
             });
 
-            // Prendre les 5 dernières sessions
-            const lastFiveSessions = Array.from(sessions.entries())
-                .sort((a, b) => b[1].timestamp - a[1].timestamp)
-                .slice(0, 5);
-
             const canvas = document.getElementById('statsChart');
+            
             if (currentChart) {
                 currentChart.destroy();
             }
 
-            // Préparer les données pour chaque opération
-            const datasets = Array.from({ length: 8 }, (_, index) => {
-                const operationNumber = index + 1;
-                return {
-                    label: `Opération ${operationNumber}`,
-                    data: lastFiveSessions.map(([_, session]) => {
-                        const operation = session.operations.get(operationNumber);
-                        return operation ? operation.time_taken / 1000 : 0;
-                    }).reverse(),
-                    backgroundColor: [
-                        'rgba(0, 83, 134, 0.7)',    // DarkBlue
-                        'rgba(29, 169, 255, 0.7)',  // LightBlue
-                        'rgba(200, 211, 0, 0.7)',   // Green
-                        'rgba(232, 119, 34, 0.7)',  // Orange
-                        'rgba(218, 41, 28, 0.7)',   // Red
-                        'rgba(0, 150, 136, 0.7)',   // Teal
-                        'rgba(156, 39, 176, 0.7)',  // Purple
-                        'rgba(33, 150, 243, 0.7)'   // Blue
-                    ][index]
-                };
-            });
+            const datasets = Object.entries(groupedData).map(([opNum, times], index) => ({
+                label: times[0].operation_name,
+                data: times.map(t => t.time_taken / 1000).reverse(),
+                backgroundColor: [
+                    'rgba(0, 83, 134, 0.7)',   // Major-Color-DarkBlue
+                    'rgba(29, 169, 255, 0.7)',  // Major-Color-LightBlue
+                    'rgba(200, 211, 0, 0.7)',   // Biovia-Medidata-green
+                    'rgba(232, 119, 34, 0.7)',  // Enovia-Netvibes-Orange
+                    'rgba(218, 41, 28, 0.7)',   // SolidWorks-Red
+                    'rgba(0, 150, 136, 0.7)',
+                    'rgba(156, 39, 176, 0.7)',
+                    'rgba(33, 150, 243, 0.7)'
+                ][index % 8]
+            }));
 
-            // Afficher les temps totaux
-            const totalTimeList = document.createElement('div');
-            totalTimeList.className = 'total-time-list';
-            totalTimeList.innerHTML = '<h4>Temps totaux par session:</h4>';
-            lastFiveSessions.reverse().forEach(([_, session]) => {
-                const totalTimeMinutes = (session.totalTime / 1000 / 60).toFixed(2);
-                totalTimeList.innerHTML += `
-                    <div>
-                        <strong>${session.timestamp.toLocaleString()}</strong>: 
-                        ${totalTimeMinutes} minutes
-                    </div>
-                `;
-            });
-
-            let existingTotalTimeList = document.querySelector('.total-time-list');
-            if (existingTotalTimeList) {
-                existingTotalTimeList.replaceWith(totalTimeList);
-            } else {
-                document.getElementById('historyPanel').appendChild(totalTimeList);
-            }
-
-            // Créer le graphique
             currentChart = new Chart(canvas, {
                 type: 'bar',
                 data: {
-                    labels: lastFiveSessions.map(([_, session]) => 
-                        session.timestamp.toLocaleString()
-                    ),
+                    labels: ['5e dernier', '4e dernier', '3e dernier', '2e dernier', 'Dernier'],
                     datasets: datasets
                 },
                 options: {
@@ -335,10 +339,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
                     maintainAspectRatio: false,
                     plugins: {
                         legend: {
-                            position: 'bottom',
-                            labels: {
-                                padding: 20
-                            }
+                            position: 'top',
                         }
                     },
                     scales: {
