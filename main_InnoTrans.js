@@ -130,13 +130,14 @@ document.addEventListener('DOMContentLoaded', (event) => {
         }
     });
 
-    // Show statistics panel
+    // Show statistics panel and save to Supabase
     async function showStatistics() {
         const stepStats = document.getElementById('stepStats');
         const totalTime = document.getElementById('totalTime');
         stepStats.innerHTML = '';
 
         let totalMs = 0;
+        const sessionTimestamp = new Date().toISOString();
 
         // Pour chaque étape, sauvegarder dans Supabase
         for (let index = 0; index < steps.length; index++) {
@@ -157,7 +158,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
                         operation_number: index + 1,
                         operation_name: title,
                         time_taken: time,
-                        total_time: totalMs
+                        total_time: totalMs,
+                        session_id: sessionTimestamp // Ajout d'un identifiant de session
                     }]);
 
                 if (error) throw error;
@@ -244,124 +246,122 @@ document.addEventListener('DOMContentLoaded', (event) => {
     }
 
     async function updateChart() {
-    try {
-        // Récupérer les données de Supabase
-        const { data, error } = await supabaseClient
-            .from('operation_times')
-            .select('*')
-            .order('timestamp', { ascending: false });
+        try {
+            // Récupérer les données groupées par session
+            const { data, error } = await supabaseClient
+                .from('operation_times')
+                .select('*')
+                .order('session_id', { ascending: false });
 
-        if (error) throw error;
+            if (error) throw error;
 
-        // Grouper les données par session (timestamp exact)
-        const sessionData = {};
-        data.forEach(record => {
-            const timestamp = record.timestamp; // Utiliser le timestamp complet
-            if (!sessionData[timestamp]) {
-                sessionData[timestamp] = {
-                    operations: {},
-                    totalTime: 0,
-                    date: new Date(timestamp)
-                };
+            // Grouper les données par session
+            const sessions = new Map();
+            data.forEach(record => {
+                if (!sessions.has(record.session_id)) {
+                    sessions.set(record.session_id, {
+                        timestamp: new Date(record.timestamp),
+                        operations: new Map(),
+                        totalTime: record.total_time
+                    });
+                }
+                sessions.get(record.session_id).operations.set(record.operation_number, record);
+            });
+
+            // Prendre les 5 dernières sessions
+            const lastFiveSessions = Array.from(sessions.entries())
+                .sort((a, b) => b[1].timestamp - a[1].timestamp)
+                .slice(0, 5);
+
+            const canvas = document.getElementById('statsChart');
+            if (currentChart) {
+                currentChart.destroy();
             }
-            sessionData[timestamp].operations[record.operation_number] = record;
-            sessionData[timestamp].totalTime = Math.max(sessionData[timestamp].totalTime || 0, record.total_time || 0);
-        });
 
-        // Prendre les 5 dernières sessions uniques
-        const lastFiveSessions = Object.entries(sessionData)
-            .sort((a, b) => b[1].date - a[1].date)
-            .slice(0, 5);
+            // Préparer les données pour chaque opération
+            const datasets = Array.from({ length: 8 }, (_, index) => {
+                const operationNumber = index + 1;
+                return {
+                    label: `Opération ${operationNumber}`,
+                    data: lastFiveSessions.map(([_, session]) => {
+                        const operation = session.operations.get(operationNumber);
+                        return operation ? operation.time_taken / 1000 : 0;
+                    }).reverse(),
+                    backgroundColor: [
+                        'rgba(0, 83, 134, 0.7)',    // DarkBlue
+                        'rgba(29, 169, 255, 0.7)',  // LightBlue
+                        'rgba(200, 211, 0, 0.7)',   // Green
+                        'rgba(232, 119, 34, 0.7)',  // Orange
+                        'rgba(218, 41, 28, 0.7)',   // Red
+                        'rgba(0, 150, 136, 0.7)',   // Teal
+                        'rgba(156, 39, 176, 0.7)',  // Purple
+                        'rgba(33, 150, 243, 0.7)'   // Blue
+                    ][index]
+                };
+            });
 
-        const canvas = document.getElementById('statsChart');
-        
-        if (currentChart) {
-            currentChart.destroy();
-        }
+            // Afficher les temps totaux
+            const totalTimeList = document.createElement('div');
+            totalTimeList.className = 'total-time-list';
+            totalTimeList.innerHTML = '<h4>Temps totaux par session:</h4>';
+            lastFiveSessions.reverse().forEach(([_, session]) => {
+                const totalTimeMinutes = (session.totalTime / 1000 / 60).toFixed(2);
+                totalTimeList.innerHTML += `
+                    <div>
+                        <strong>${session.timestamp.toLocaleString()}</strong>: 
+                        ${totalTimeMinutes} minutes
+                    </div>
+                `;
+            });
 
-        // Préparer les données pour le graphique
-        const datasets = Array.from({ length: 8 }, (_, i) => {
-            const operationNumber = i + 1;
-            return {
-                label: `${operationNumber} - ${data.find(d => d.operation_number === operationNumber)?.operation_name}`,
-                data: lastFiveSessions.map(([_, session]) => 
-                    (session.operations[operationNumber]?.time_taken || 0) / 1000
-                ).reverse(),
-                backgroundColor: [
-                    'rgba(0, 83, 134, 0.7)',    // Major-Color-DarkBlue
-                    'rgba(29, 169, 255, 0.7)',   // Major-Color-LightBlue
-                    'rgba(200, 211, 0, 0.7)',    // Biovia-Medidata-green
-                    'rgba(232, 119, 34, 0.7)',   // Enovia-Netvibes-Orange
-                    'rgba(218, 41, 28, 0.7)',    // SolidWorks-Red
-                    'rgba(0, 150, 136, 0.7)',
-                    'rgba(156, 39, 176, 0.7)',
-                    'rgba(33, 150, 243, 0.7)'
-                ][i]
-            };
-        });
+            let existingTotalTimeList = document.querySelector('.total-time-list');
+            if (existingTotalTimeList) {
+                existingTotalTimeList.replaceWith(totalTimeList);
+            } else {
+                document.getElementById('historyPanel').appendChild(totalTimeList);
+            }
 
-        // Mettre à jour la liste des temps totaux
-        const totalTimeList = document.createElement('div');
-        totalTimeList.className = 'total-time-list';
-        totalTimeList.innerHTML = '<h4>Temps totaux par session:</h4>';
-        lastFiveSessions.reverse().forEach(([timestamp, session]) => {
-            const totalTimeMinutes = (session.totalTime / 1000 / 60).toFixed(2);
-            totalTimeList.innerHTML += `
-                <div>
-                    <strong>${session.date.toLocaleString()}</strong>: 
-                    ${totalTimeMinutes} minutes
-                </div>
-            `;
-        });
-
-        let existingTotalTimeList = document.querySelector('.total-time-list');
-        if (existingTotalTimeList) {
-            existingTotalTimeList.replaceWith(totalTimeList);
-        } else {
-            document.getElementById('historyPanel').appendChild(totalTimeList);
-        }
-
-        currentChart = new Chart(canvas, {
-            type: 'bar',
-            data: {
-                labels: lastFiveSessions.map(([_, session]) => 
-                    session.date.toLocaleString()
-                ).reverse(),
-                datasets: datasets
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        align: 'start',
-                        labels: {
-                            padding: 20
-                        }
-                    }
+            // Créer le graphique
+            currentChart = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: lastFiveSessions.map(([_, session]) => 
+                        session.timestamp.toLocaleString()
+                    ),
+                    datasets: datasets
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Temps (secondes)'
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20
+                            }
                         }
                     },
-                    x: {
-                        ticks: {
-                            maxRotation: 45,
-                            minRotation: 45
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Temps (secondes)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
                         }
                     }
                 }
-            }
-        });
-    } catch (error) {
-        console.error('Error updating chart:', error);
+            });
+        } catch (error) {
+            console.error('Error updating chart:', error);
+        }
     }
-}
 
     // Initialize step highlighting
     highlightSteps();
