@@ -1,0 +1,224 @@
+/* Variables */
+:root {
+    /* Major colors */
+    --Major-Color-DarkBlue: rgb(0,83,134);
+    --Major-Color-LightBlue: rgb(29,169,255);
+    --Major-Color-Grey: rgb(151,153,155);
+    
+    /* Catia */
+    --Catia-Geovia-simulia-blue: rgb(0,24,113);
+    
+    /* Delmia */
+    --Delmia-Yellow: rgb(255,205,0);
+    
+    /* SolidWorks */
+    --SolidWorks-Red: rgb(218,41,28);
+    
+    /* Biovia Medidata */
+    --Biovia-Medidata-green: rgb(200,211,0);
+    
+    /* Enovia Netvibes */
+    --Enovia-Netvibes-Orange: rgb(232,119,34);
+    
+    /* 3DEXCITE 3DVIA CENTRIC PLM */
+    --v3DExcite-3DVIA-CentricPLM-black: black;
+}
+
+/* Body properties */
+body {
+    font-family: "3ds", sans-serif;
+    color: var(--Major-Color-DarkBlue);
+    margin: 0;
+    padding: 0;
+    background-color: white;
+}
+
+/* Header */
+div.header {
+    position: relative;
+    height: 70px;
+    background-color: var(--Major-Color-DarkBlue);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+}
+
+div.header > span {
+    width: 100%;
+    text-align: center;
+}
+
+#compass {
+    height: 50px;
+}
+
+#title {
+    font-size: 44px;
+    margin-left: 20px;
+    text-align: center;
+    color: white;
+}
+
+/* Timer Styles */
+.timer-button {
+    padding: 8px 16px;
+    background-color: var(--Biovia-Medidata-green);
+    color: var(--v3DExcite-3DVIA-CentricPLM-black);
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin: 0 15px;
+    font-size: 16px;
+    font-weight: bold;
+    transition: transform 0.2s, background-color 0.3s;
+}
+
+.timer-button:hover {
+    transform: scale(1.05);
+}
+
+.timer-button.running {
+    background-color: var(--SolidWorks-Red);
+    color: white;
+}
+
+.timer-display {
+    font-family: monospace;
+    font-size: 16px;
+    color: white;
+    min-width: 90px;
+    display: inline-block;
+    text-align: center;
+    padding: 5px 10px;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Stats Panel */
+.stats-panel {
+    display: none;
+    margin: 20px auto;
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    max-width: 800px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--Major-Color-Grey);
+}
+
+.stats-panel.visible {
+    display: block;
+}
+
+.stats-panel h3 {
+    margin-top: 0;
+    color: var(--Major-Color-DarkBlue);
+    border-bottom: 2px solid var(--Major-Color-LightBlue);
+    padding-bottom: 10px;
+    font-size: 24px;
+}
+
+#stepStats div {
+    padding: 12px 10px;
+    border-bottom: 1px solid var(--Major-Color-Grey);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 16px;
+}
+
+#stepStats div:hover {
+    background-color: rgba(29, 169, 255, 0.1);
+}
+
+#totalTime {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 2px solid var(--Major-Color-LightBlue);
+    font-weight: bold;
+    text-align: right;
+    font-size: 18px;
+    color: var(--Major-Color-DarkBlue);
+}
+
+/* Process Steps */
+.process-steps {
+    padding: 20px;
+}
+
+.process-step {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 10px;
+    border: 1px solid var(--Major-Color-Grey);
+    border-radius: 5px;
+    background-color: #f9f9f9;
+}
+
+.process-step:hover {
+    border: 2px solid var(--Major-Color-DarkBlue);
+    background-color: #f1f1f1;
+}
+
+/* Highlighted process step */
+.process-step.highlighted {
+    border: 4px solid var(--Biovia-Medidata-green);
+    background-color: #c7e0d2;
+}
+
+.process-step .timer-display {
+    color: var(--Major-Color-DarkBlue);
+    background-color: rgba(151, 153, 155, 0.1);
+    margin-left: 15px;
+    font-size: 14px;
+}
+
+.process-number {
+    font-size: 25px;
+    margin-right: 20px;
+    width: 50px;
+    height: 50px;
+    line-height: 50px;
+    text-align: center;
+    border-radius: 50%;
+    background: linear-gradient(145deg, var(--Major-Color-LightBlue), var(--Major-Color-DarkBlue));
+    color: white;
+    box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.3), -3px -3px 8px rgba(255, 255, 255, 0.3);
+}
+
+.process-step .validate-button:disabled, .process-step .reset-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.process-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-grow: 1;
+    padding: 0 15px;
+}
+
+.process-title {
+    font-size: 30px;
+}
+
+.process-actor {
+    margin-left: 100px;
+    height: 50px;
+    width: 50px;
+    cursor: default;
+}
+
+.process-image {
+    margin-left: 10px;
+    height: 70px;
+    width: 70px;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+
+.process-image:hover {
+    transform: scale(1.6);
+}
