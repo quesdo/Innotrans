@@ -6,7 +6,7 @@
     <title>Process Steps</title>
     <link rel="stylesheet" href="main_InnoTrans.css">
     <link rel="stylesheet" href="timer_styles.css">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .chart-container {
@@ -181,10 +181,12 @@
     <script>
         let currentChart = null;
 
+        // Fonction pour afficher le graphique
         window.updateChart = function(data) {
             const lastFiveSessions = data.slice(-5).reverse();
             const canvas = document.getElementById('statsChart');
             
+            // Détruire le graphique existant s'il y en a un
             if (currentChart) {
                 currentChart.destroy();
             }
@@ -193,27 +195,29 @@
                 return;
             }
 
+            // Préparer les données pour le graphique
             const labels = lastFiveSessions[0].steps.map(step => step.title);
             const datasets = lastFiveSessions.map((session, index) => ({
                 label: `Session ${lastFiveSessions.length - index} (${new Date(session.timestamp).toLocaleDateString()})`,
-                data: session.steps.map(step => step.time / 1000),
+                data: session.steps.map(step => step.time / 1000), // Convertir en secondes
                 backgroundColor: [
-                    'rgba(0, 83, 134, 0.7)',
-                    'rgba(29, 169, 255, 0.7)',
-                    'rgba(200, 211, 0, 0.7)',
-                    'rgba(232, 119, 34, 0.7)',
-                    'rgba(218, 41, 28, 0.7)'
+                    'rgba(0, 83, 134, 0.7)',   // Major-Color-DarkBlue
+                    'rgba(29, 169, 255, 0.7)', // Major-Color-LightBlue
+                    'rgba(200, 211, 0, 0.7)',  // Biovia-Medidata-green
+                    'rgba(232, 119, 34, 0.7)', // Enovia-Netvibes-Orange
+                    'rgba(218, 41, 28, 0.7)'   // SolidWorks-Red
                 ][index],
                 borderColor: [
-                    'rgb(0, 83, 134)',
-                    'rgb(29, 169, 255)',
-                    'rgb(200, 211, 0)',
-                    'rgb(232, 119, 34)',
-                    'rgb(218, 41, 28)'
+                    'rgb(0, 83, 134)',   // Major-Color-DarkBlue
+                    'rgb(29, 169, 255)', // Major-Color-LightBlue
+                    'rgb(200, 211, 0)',  // Biovia-Medidata-green
+                    'rgb(232, 119, 34)', // Enovia-Netvibes-Orange
+                    'rgb(218, 41, 28)'   // SolidWorks-Red
                 ][index],
                 borderWidth: 1
             }));
 
+            // Créer le graphique
             currentChart = new Chart(canvas, {
                 type: 'bar',
                 data: {
