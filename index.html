@@ -5,37 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Process Steps</title>
     <link rel="stylesheet" href="main_InnoTrans.css">
-    <link rel="stylesheet" href="timer_styles.css">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        .chart-container {
-            padding: 20px;
-            background: white;
-            border-radius: 8px;
-            margin: 20px 0;
-            height: 400px;
-        }
-
-        .current-step-indicator {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            background-color: var(--Major-Color-DarkBlue);
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            font-size: 18px;
-            z-index: 1000;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        }
-
-        .current-step-indicator .step-number {
-            font-weight: bold;
-            color: var(--Delmia-Yellow);
-            margin-right: 10px;
-        }
-    </style>
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
     <div class="header">
@@ -172,88 +145,11 @@
     </div>
 
     <div id="historyPanel" class="stats-panel">
-        <h3>Comparaison des 5 dernières sessions</h3>
+        <h3>Historique des 5 dernières sessions</h3>
         <div class="chart-container">
             <canvas id="statsChart"></canvas>
         </div>
     </div>
-
-    <script>
-        let currentChart = null;
-
-        // Fonction pour afficher le graphique
-        window.updateChart = function(data) {
-            const lastFiveSessions = data.slice(-5).reverse();
-            const canvas = document.getElementById('statsChart');
-            
-            // Détruire le graphique existant s'il y en a un
-            if (currentChart) {
-                currentChart.destroy();
-            }
-
-            if (lastFiveSessions.length === 0) {
-                return;
-            }
-
-            // Préparer les données pour le graphique
-            const labels = lastFiveSessions[0].steps.map(step => step.title);
-            const datasets = lastFiveSessions.map((session, index) => ({
-                label: `Session ${lastFiveSessions.length - index} (${new Date(session.timestamp).toLocaleDateString()})`,
-                data: session.steps.map(step => step.time / 1000), // Convertir en secondes
-                backgroundColor: [
-                    'rgba(0, 83, 134, 0.7)',   // Major-Color-DarkBlue
-                    'rgba(29, 169, 255, 0.7)', // Major-Color-LightBlue
-                    'rgba(200, 211, 0, 0.7)',  // Biovia-Medidata-green
-                    'rgba(232, 119, 34, 0.7)', // Enovia-Netvibes-Orange
-                    'rgba(218, 41, 28, 0.7)'   // SolidWorks-Red
-                ][index],
-                borderColor: [
-                    'rgb(0, 83, 134)',   // Major-Color-DarkBlue
-                    'rgb(29, 169, 255)', // Major-Color-LightBlue
-                    'rgb(200, 211, 0)',  // Biovia-Medidata-green
-                    'rgb(232, 119, 34)', // Enovia-Netvibes-Orange
-                    'rgb(218, 41, 28)'   // SolidWorks-Red
-                ][index],
-                borderWidth: 1
-            }));
-
-            // Créer le graphique
-            currentChart = new Chart(canvas, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: datasets
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'top',
-                        },
-                        title: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Temps (secondes)'
-                            }
-                        },
-                        x: {
-                            ticks: {
-                                maxRotation: 45,
-                                minRotation: 45
-                            }
-                        }
-                    }
-                }
-            });
-        };
-    </script>
 
     <script src="main_InnoTrans.js"></script>
 </body>
