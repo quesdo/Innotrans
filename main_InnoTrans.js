@@ -1,3 +1,8 @@
+// Initialize Supabase client
+const supabaseUrl = 'https://kikivfglslrobwttvlvn.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtpa2l2Zmdsc2xyb2J3dHR2bHZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ1MTIwNDQsImV4cCI6MjA1MDA4ODA0NH0.Njo06GXSyZHjpjRwPJ2zpElJ88VYgqN2YYDfTJnBQ6k';
+const supabase = supabaseClient.createClient(supabaseUrl, supabaseKey);
+
 function openMain() {
     console.log("Compass clicked!");
 }
@@ -41,43 +46,48 @@ document.addEventListener('DOMContentLoaded', (event) => {
     const historyPanel = document.getElementById('historyPanel');
     const processStepsContainer = document.querySelector('.process-steps');
 
-    // Écoute des messages de changement d'opération
-    window.addEventListener('message', function(event) {
-        try {
-            const msg = JSON.parse(event.data);
-            if (msg.action === "operationChange") {
-                const nextOpParts = msg.nextOp.split(" - ");
-                const stepNumber = nextOpParts[0];
-                const stepTitle = nextOpParts[1];
-                
-                const indicator = document.querySelector('.current-step-indicator');
-                if (indicator) {
-                    indicator.querySelector('.step-number').textContent = `Step ${stepNumber}`;
-                    indicator.querySelector('.step-title').textContent = stepTitle;
-                }
-
-                // Mettre à jour la classe highlighted pour les étapes
-                const steps = document.querySelectorAll('.process-step');
-                steps.forEach((step) => {
-                    const currentStepNumber = step.querySelector('.process-number').textContent.trim();
-                    if (parseInt(currentStepNumber) < parseInt(stepNumber)) {
-                        step.classList.add('highlighted');
-                    } else if (parseInt(currentStepNumber) === parseInt(stepNumber)) {
-                        step.classList.remove('highlighted');
-                    }
-                });
-            }
-        } catch (e) {
-            console.error("Error processing message:", e);
-        }
-    });
-
     // Timer formatting function
     function formatTime(ms) {
         const seconds = Math.floor((ms / 1000) % 60);
         const minutes = Math.floor((ms / (1000 * 60)) % 60);
         const hours = Math.floor(ms / (1000 * 60 * 60));
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    // Supabase functions for saving and loading stats
+    async function saveStatsHistory() {
+        const currentStats = statsHistory[statsHistory.length - 1];
+        try {
+            const { data, error } = await supabase
+                .from('process_sessions')
+                .insert([{
+                    timestamp: new Date().toISOString(),
+                    steps: currentStats.steps,
+                    total_time: currentStats.totalTime
+                }]);
+
+            if (error) throw error;
+            console.log('Stats saved successfully');
+        } catch (error) {
+            console.error('Error saving stats:', error);
+        }
+    }
+
+    async function loadStatsHistory() {
+        try {
+            const { data, error } = await supabase
+                .from('process_sessions')
+                .select('*')
+                .order('timestamp', { ascending: false })
+                .limit(5);
+
+            if (error) throw error;
+            statsHistory = data;
+            console.log('Stats loaded successfully:', statsHistory);
+        } catch (error) {
+            console.error('Error loading stats:', error);
+            statsHistory = [];
+        }
     }
 
     // Show history button click handler
@@ -192,23 +202,10 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
         currentStats.totalTime = totalMs;
         statsHistory.push(currentStats);
+        saveStatsHistory();
         
         totalTime.textContent = `Total Time: ${formatTime(totalMs)}`;
         statsPanel.classList.add('visible');
-        saveStatsHistory();
-    }
-
-    // Function to save stats history to localStorage
-    function saveStatsHistory() {
-        localStorage.setItem('statsHistory', JSON.stringify(statsHistory));
-    }
-
-    // Function to load stats history from localStorage
-    function loadStatsHistory() {
-        const saved = localStorage.getItem('statsHistory');
-        if (saved) {
-            statsHistory = JSON.parse(saved);
-        }
     }
 
     // Next operation handler
@@ -290,7 +287,38 @@ document.addEventListener('DOMContentLoaded', (event) => {
         });
     }
 
-    // Initialize step highlighting and load history
+    // Window message event listener
+    window.addEventListener('message', function(event) {
+        try {
+            const msg = JSON.parse(event.data);
+            if (msg.action === "operationChange") {
+                const nextOpParts = msg.nextOp.split(" - ");
+                const stepNumber = nextOpParts[0];
+                const stepTitle = nextOpParts[1];
+                
+                const indicator = document.querySelector('.current-step-indicator');
+                if (indicator) {
+                    indicator.querySelector('.step-number').textContent = `Step ${stepNumber}`;
+                    indicator.querySelector('.step-title').textContent = stepTitle;
+                }
+
+                // Update highlighted steps
+                const steps = document.querySelectorAll('.process-step');
+                steps.forEach((step) => {
+                    const currentStepNumber = step.querySelector('.process-number').textContent.trim();
+                    if (parseInt(currentStepNumber) < parseInt(stepNumber)) {
+                        step.classList.add('highlighted');
+                    } else if (parseInt(currentStepNumber) === parseInt(stepNumber)) {
+                        step.classList.remove('highlighted');
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("Error processing message:", e);
+        }
+    });
+
+    // Initialize
     highlightSteps();
     loadStatsHistory();
 });
