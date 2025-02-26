@@ -3,6 +3,8 @@ const supabaseUrl = 'https://kikivfglslrobwttvlvn.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtpa2l2Zmdsc2xyb2J3dHR2bHZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ1MTIwNDQsImV4cCI6MjA1MDA4ODA0NH0.Njo06GXSyZHjpjRwPJ2zpElJ88VYgqN2YYDfTJnBQ6k';
 const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
+// Identifiant unique pour la session utilisateur
+const sessionId = 'user_' + Math.random().toString(36).substring(2, 15);
 let currentChart = null;
 
 function openMain() {
@@ -123,7 +125,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
     }
 
     // Timer button click handler
-    timerButton.addEventListener('click', () => {
+    timerButton.addEventListener('click', async () => {
         if (!isTimerRunning) {
             // Start timer
             isTimerRunning = true;
@@ -147,6 +149,39 @@ document.addEventListener('DOMContentLoaded', (event) => {
             // Start timing the first step
             startTimes[0] = Date.now();
             
+            // Créer une nouvelle session dans Supabase
+            try {
+                const { data, error } = await supabaseClient
+                    .from('process_sessions')
+                    .insert([{
+                        session_id: sessionId,
+                        status: 'running',
+                        start_time: new Date().toISOString()
+                    }])
+                    .select();
+                
+                if (error) throw error;
+                
+                // Initialiser l'état des étapes dans Supabase
+                for (let i = 0; i < steps.length; i++) {
+                    const step = steps[i];
+                    const title = step.querySelector('.process-title').textContent;
+                    const stepNumber = step.querySelector('.process-number').textContent.trim();
+                    
+                    await supabaseClient
+                        .from('step_status')
+                        .insert([{
+                            session_id: sessionId,
+                            step_number: parseInt(stepNumber),
+                            step_name: title,
+                            status: 'pending',
+                            timestamp: new Date().toISOString()
+                        }]);
+                }
+            } catch (error) {
+                console.error('Error creating session in Supabase:', error);
+            }
+            
         } else {
             // Stop timer and show statistics
             isTimerRunning = false;
@@ -162,6 +197,18 @@ document.addEventListener('DOMContentLoaded', (event) => {
                     stepTimes[currentIndex] += Date.now() - startTimes[currentIndex];
                     startTimes[currentIndex] = null;
                 }
+            }
+            
+            // Mettre à jour le statut de la session dans Supabase
+            try {
+                const { error } = await supabaseClient
+                    .from('process_sessions')
+                    .update({ status: 'completed', end_time: new Date().toISOString() })
+                    .eq('session_id', sessionId);
+                
+                if (error) throw error;
+            } catch (error) {
+                console.error('Error updating session in Supabase:', error);
             }
             
             showStatistics();
@@ -208,9 +255,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
     }
 
     // Next operation handler
-    window.nextOp = function(element) {
+    window.nextOp = async function(element) {
         const processStep = element.closest('.process-step');
         const stepIndex = Array.from(steps).indexOf(processStep);
+        const stepNumber = processStep.querySelector('.process-number').textContent.trim();
+        const stepTitle = processStep.querySelector('.process-title').textContent.trim();
 
         if (stepStatuses.slice(0, stepIndex).every(status => status)) {
             if (isTimerRunning && startTimes[stepIndex]) {
@@ -228,13 +277,36 @@ document.addEventListener('DOMContentLoaded', (event) => {
             const operationName = getOperationName(processStep);
             sendNextOp(operationName);
             highlightSteps();
+            
+            // Enregistrer l'action dans Supabase pour synchronisation
+            try {
+                const { data, error } = await supabaseClient
+                    .from('step_actions')
+                    .insert([{
+                        session_id: sessionId,
+                        step_number: parseInt(stepNumber),
+                        step_name: stepTitle,
+                        action: 'validate',
+                        timestamp: new Date().toISOString()
+                    }])
+                    .select();
+                
+                if (error) throw error;
+                
+                // Mettre à jour le statut de l'étape
+                await updateStepStatus(parseInt(stepNumber), 'completed');
+            } catch (error) {
+                console.error('Error saving step action to Supabase:', error);
+            }
         }
     };
 
     // Reset operation handler
-    window.resetOp = function(element) {
+    window.resetOp = async function(element) {
         const processStep = element.closest('.process-step');
         const stepIndex = Array.from(steps).indexOf(processStep);
+        const stepNumber = processStep.querySelector('.process-number').textContent.trim();
+        const stepTitle = processStep.querySelector('.process-title').textContent.trim();
 
         if (isTimerRunning) {
             startTimes[stepIndex] = null;
@@ -265,7 +337,47 @@ document.addEventListener('DOMContentLoaded', (event) => {
             const nextStepOperation = getOperationName(steps[i]);
             sendRemoveOp(nextStepOperation);
         }
+        
+        // Enregistrer l'action dans Supabase pour synchronisation
+        try {
+            const { data, error } = await supabaseClient
+                .from('step_actions')
+                .insert([{
+                    session_id: sessionId,
+                    step_number: parseInt(stepNumber),
+                    step_name: stepTitle,
+                    action: 'reset',
+                    timestamp: new Date().toISOString()
+                }])
+                .select();
+            
+            if (error) throw error;
+            
+            // Mettre à jour le statut de l'étape et des étapes suivantes
+            await updateStepStatus(parseInt(stepNumber), 'pending');
+            for (let i = stepIndex + 1; i < steps.length; i++) {
+                const nextNumber = steps[i].querySelector('.process-number').textContent.trim();
+                await updateStepStatus(parseInt(nextNumber), 'pending');
+            }
+        } catch (error) {
+            console.error('Error saving step action to Supabase:', error);
+        }
     };
+
+    // Mettre à jour le statut d'une étape dans Supabase
+    async function updateStepStatus(stepNumber, status) {
+        try {
+            const { error } = await supabaseClient
+                .from('step_status')
+                .update({ status: status, timestamp: new Date().toISOString() })
+                .eq('session_id', sessionId)
+                .eq('step_number', stepNumber);
+            
+            if (error) throw error;
+        } catch (error) {
+            console.error('Error updating step status in Supabase:', error);
+        }
+    }
 
     // Get operation name helper
     function getOperationName(processStep) {
@@ -364,6 +476,84 @@ document.addEventListener('DOMContentLoaded', (event) => {
         }
     }
 
+    // S'abonner aux changements de statut des étapes
+    async function subscribeToStepActions() {
+        try {
+            const subscription = supabaseClient
+                .channel('step-actions-channel')
+                .on('postgres_changes', 
+                    { 
+                        event: 'INSERT', 
+                        schema: 'public', 
+                        table: 'step_actions' 
+                    }, 
+                    handleStepAction)
+                .subscribe();
+                
+            console.log('Subscribed to step actions');
+        } catch (error) {
+            console.error('Error subscribing to step actions:', error);
+        }
+    }
+
+    // Gérer les actions d'étapes venant d'autres utilisateurs
+    function handleStepAction(payload) {
+        const { new: stepAction } = payload;
+        
+        // Ignorer les actions provenant de cette session
+        if (stepAction.session_id === sessionId) return;
+        
+        console.log('Received step action:', stepAction);
+        
+        const stepNumber = stepAction.step_number;
+        const action = stepAction.action;
+        
+        // Trouver l'élément correspondant
+        const targetStep = Array.from(steps).find(step => {
+            const currentStepNumber = parseInt(step.querySelector('.process-number').textContent.trim());
+            return currentStepNumber === stepNumber;
+        });
+        
+        if (!targetStep) return;
+        
+        const stepIndex = Array.from(steps).indexOf(targetStep);
+        
+        // Appliquer l'action synchronisée localement
+        if (action === 'validate') {
+            // Synchroniser la validation d'étape
+            stepStatuses[stepIndex] = true;
+            highlightSteps();
+            
+            // Notification visuelle
+            targetStep.style.transition = 'background-color 0.5s';
+            targetStep.style.backgroundColor = 'rgba(200, 211, 0, 0.3)';
+            setTimeout(() => {
+                targetStep.style.backgroundColor = '';
+            }, 1000);
+            
+        } else if (action === 'reset') {
+            // Synchroniser la réinitialisation d'étape
+            stepStatuses[stepIndex] = false;
+            
+            // Réinitialiser aussi les étapes suivantes
+            for (let i = stepIndex + 1; i < steps.length; i++) {
+                stepStatuses[i] = false;
+            }
+            
+            highlightSteps();
+            
+            // Notification visuelle
+            targetStep.style.transition = 'background-color 0.5s';
+            targetStep.style.backgroundColor = 'rgba(218, 41, 28, 0.3)';
+            setTimeout(() => {
+                targetStep.style.backgroundColor = '';
+            }, 1000);
+        }
+    }
+
     // Initialize step highlighting
     highlightSteps();
+    
+    // S'abonner aux mises à jour en temps réel
+    subscribeToStepActions();
 });
